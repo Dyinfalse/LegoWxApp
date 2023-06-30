@@ -1,0 +1,23 @@
+{
+  "name": "webrtc_demo",
+  "version": "1.0.0",
+  "description": "一个WebRTC的Demo, 包含一个node服务端脚本完成信令交互, 支持视频, 音频, 仅点对点",
+  "main": "index.js",
+  "scripts": {
+    "ws": "node signaling.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dyinfalse/WebRTC_Demo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Dyinfalse/WebRTC_Demo/issues"
+  },
+  "homepage": "https://github.com/Dyinfalse/WebRTC_Demo#readme",
+  "dependencies": {
+    "ws": "^8.3.0"
+  }
+}

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC测试</title>
+</head>
+<body>
+    <div>
+        <input type="text" name="" id="called">
+        <button id="call">呼叫</button>
+        <button id="answer" style="display: none;">应答</button>
+    </div>
+    <div style="display: flex;">
+        <div>
+            <p>本端</p>
+            <video id="video" autoplay width="300px" height="200px"></video>
+        </div>
+        <div>
+            <p>对端</p>
+            <video id="remote" autoplay width="300px" height="200px"></video>
+        </div>
+    </div>
+    <script>
+            // 链接 signaling.js 的ws链接
+            let ws = new WebSocket('ws://localhost:8090');
+            let pc;
+            let inviteSDP;
+            let candidateList = [];
+            let caller;
+
+            const controller = {
+                UserNotFound() {
+                    console.log('用户未找到')
+                    console.trace();
+                },
+                Invite(data) {
+                    // 收到呼叫, 开始振铃
+                    document.getElementById('answer').style.display = 'inline';
+                    inviteSDP = data.data;
+                    caller = data.user;
+                },
+                Answer(data) {
+                    // 收到被叫的应答回复
+                    pc.setRemoteDescription(data.data);
+                    pc.ontrack = (e) => {
+                        document.getElementById('remote').srcObject = e.streams[0]
+                    }
+                },
+                // 交换 icecandidate
+                Candidate(data) {
+                    if (pc) {
+                        pc.addIceCandidate(data.data)
+                    } else {
+                        candidateList.push(data.data)
+                    }
+                }
+            }
+
+            ws.onmessage = function(message) {
+                let data = JSON.parse(message.data);
+
+                if (data.type) {
+                    controller[data.type] && controller[data.type](data);
+                }
+            }
+
+            ws.onopen = function () {
+                send('Login', window.location.hash)
+            }
+
+            function send(type, data, target) {
+                ws.send(JSON.stringify({
+                    type,
+                    data,
+                    user: window.location.hash,    // 本端
+                    target                         // 对端
+                }));
+            }
+            // 应答
+            document.getElementById('answer').onclick = function() {
+                pc = new RTCPeerConnection();
+
+                pc.ontrack = (e) => {
+                    console.log('远端流', e)
+                    document.getElementById('remote').srcObject = e.streams[0]
+                }
+
+                navigator.mediaDevices.getUserMedia({ audio: true, video: true}).then(localMediaStream => {
+                  
+                    document.getElementById('video').srcObject = localMediaStream;
+
+                    localMediaStream.getTracks().forEach(tracks => {
+                        pc.addTrack(tracks, localMediaStream);
+                    })
+
+                    // 必须在 createAnswer 之前设置远程sdp
+                    pc.setRemoteDescription(inviteSDP);
+
+                    pc.createAnswer().then(desc => {
+                        pc.setLocalDescription(desc);
+                        send('Answer', desc, caller); // 给主叫回Answer
+
+                        if (candidateList.length > 0) {
+                            candidateList.forEach(c => pc.addIceCandidate(c))
+                            candidateList = [];
+                        }
+
+                        pc.onicecandidate = (e) => {
+                            send('Candidate', e.candidate, caller);
+                        }
+                    })
+                })
+            }
+
+            // 呼叫
+            document.getElementById('call').onclick = function () {
+                let called = document.getElementById('called').value;
+                if (!called) return console.log('输入被叫')
+
+                pc = new RTCPeerConnection();
+                
+                navigator.mediaDevices.getUserMedia({ audio: true, video: true}).then(localMediaStream => {
+                    document.getElementById('video').srcObject = localMediaStream;
+
+                    localMediaStream.getTracks().forEach(tracks => {
+                        pc.addTrack(tracks, localMediaStream);
+                    })
+
+                    pc.createOffer({
+                        offerToRecieveAudio: 1,
+                        offerToRecieveVideo: 1
+                    }).then(desc => {
+                        pc.setLocalDescription(desc);
+                        send('Invite', desc, called);
+                    })
+                    
+                    pc.onicecandidate = (e) => {
+                        send('Candidate', e.candidate, called);
+                    }
+                })
+            }
+    </script>
+</body>
+</html>
